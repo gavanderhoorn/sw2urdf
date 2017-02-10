@@ -1,4 +1,33 @@
-﻿using System;
+﻿/*
+Copyright (c) 2015 Stephen Brawner
+Modified by Sayter <sayter@dmp.com.tw> on 2017/02/10
+
+
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+
+
+The above copyright notice and this permission notice shall be included in
+all copies or substantial portions of the Software.
+
+
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+THE SOFTWARE.
+*/
+
+using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Text;
@@ -110,7 +139,7 @@ namespace SW2URDF
 
         public robot()
         {
-            BaseLink = new link();
+            BaseLink = new link(null);
             isRequired = true;
             Name = new Attribute();
             Name.isRequired = true;
@@ -133,6 +162,7 @@ namespace SW2URDF
     //The link class, it contains many other elements not found in the URDF.
     public class link : URDFElement
     {
+        public link Parent;
         public List<link> Children;
         private Attribute Name;
         public string name
@@ -163,8 +193,9 @@ namespace SW2URDF
         public List<byte[]> SWComponentPIDs;
         public byte[] SWMainComponentPID;
 
-        public link()
+        public link(link parent)
         {
+            Parent = parent;
             Children = new List<link>();
             SWcomponents = new List<Component2>();
             Name = new Attribute();
@@ -730,10 +761,10 @@ namespace SW2URDF
         {
             moment = array;
             ixx = Moment[0];
-            ixy = Moment[1];
-            ixz = Moment[2];
+            ixy = -Moment[1];
+            ixz = -Moment[2];
             iyy = Moment[4];
-            iyz = Moment[5];
+            iyz = -Moment[5];
             izz = Moment[8];
         }
         new public void writeURDF(XmlWriter writer)
@@ -1787,41 +1818,35 @@ namespace SW2URDF
     public class manifest : manifestElement
     {
         public description Description;
-        public depend[] Depends;
         public author Author;
         public license License;
+        public depend dep;
 
         public manifest(string name)
         {
             Description = new description();
-            Description.brief = name;
-            Description.longDescription = name;
-
-            Depends = new depend[1];
-            depend dep = new depend();
-            dep.package = "gazebo";
-            Depends[0] = dep;
+            Description.name = name;
 
             Author = new author();
             Author.name = "me";
 
             License = new license();
             License.lic = "BSD";
+
+            dep = new depend();
         }
         public void writeElement(manifestWriter mWriter)
         {
             XmlWriter writer = mWriter.writer;
-            writer.WriteStartDocument();
+            writer.WriteProcessingInstruction("xml", "version='1.0'");
             writer.WriteStartElement("package");
 
             Description.writeElement(writer);
-            foreach (depend dep in Depends)
-            {
-                dep.writeElement(writer);
-            }
 
             Author.writeElement(writer);
             License.writeElement(writer);
+
+            dep.writeElement(writer);
 
             writer.WriteEndElement();
             writer.WriteEndDocument();
@@ -1832,35 +1857,30 @@ namespace SW2URDF
     //description element of the manifest file
     public class description : manifestElement
     {
-        public string brief;
-        public string longDescription;
+        public string name;
         public description()
         {
-            brief = "";
-            longDescription = "";
+            name = "";
         }
         public void writeElement(XmlWriter writer)
         {
-            writer.WriteStartElement("description");
-            writer.WriteAttributeString("brief", brief);
-            writer.WriteString(longDescription);
-            writer.WriteEndElement();
+            writer.WriteElementString("name", name);
+            writer.WriteElementString("version", "0.0.0");
+            writer.WriteElementString("description", "The " + name + " package");
         }
     }
 
     //The depend element of the manifest file
     public class depend : manifestElement
     {
-        public string package;
         public depend()
         {
-            package = "";
         }
         public void writeElement(XmlWriter writer)
         {
-            writer.WriteStartElement("depend");
-            writer.WriteAttributeString("package", package);
-            writer.WriteEndElement();
+            writer.WriteElementString("buildtool_depend", "catkin");
+            writer.WriteElementString("build_depend", "urdf");
+            writer.WriteElementString("run_depend", "urdf");
         }
     }
 
@@ -1874,7 +1894,8 @@ namespace SW2URDF
         }
         public void writeElement(XmlWriter writer)
         {
-            writer.WriteStartElement("author");
+            writer.WriteStartElement("maintainer");
+            writer.WriteAttributeString("email", name + "@todo.todo");
             writer.WriteString(name);
             writer.WriteEndElement();
         }

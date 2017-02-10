@@ -1,4 +1,33 @@
-﻿using System;
+﻿/*
+Copyright (c) 2015 Stephen Brawner
+Modified by Eshun Huang <pchuang@dmp.com.tw> on 2017/02/10
+
+
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+
+
+The above copyright notice and this permission notice shall be included in
+all copies or substantial portions of the Software.
+
+
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+THE SOFTWARE.
+*/
+
+using System;
 using System.Collections.Generic;
 using MathNet.Numerics.LinearAlgebra.Double;
 using MathNet.Numerics.LinearAlgebra.Generic;
@@ -351,28 +380,91 @@ namespace SW2URDF
             XYZ[0] = transform.ArrayData[9]; XYZ[1] = transform.ArrayData[10]; XYZ[2] = transform.ArrayData[11];
             return XYZ;
         }
-        public static double[] getRPY(Matrix<double> m)
+        public static double[] getRPY(Matrix<double> m)// Output roll-pitch-yaw angle in world X-Y-Z order
         {
             double roll, pitch, yaw;
+            //double x, y;
+            /*x = Math.Min(1.0, Math.Abs(m[2, 0])) * Math.Sign(m[2, 0]);
+            y = Math.Min(1.0, Math.Abs(m[0, 2])) * Math.Sign(m[0, 2]);*/
+
+            //x = m[2, 0];
+            //y = m[0, 2];
+
+            /*if (m[2, 0] > 1.0) { x = 1.0; }
+            else if (m[2, 0] < -1.0) { x = -1.0; }*/
+
+            if (m[0, 2] > 1.0) { m[0, 2] = 1.0; }
+            else if (m[0, 2] < -1.0) { m[0, 2] = -1.0; }
+
+
+            if (m[2, 0] <= -1.0)// pitch = 90 case
+            {
+                // Gimbol Lock
+                roll = Math.Atan2(m[0, 1], m[1, 1]);//Math.Acos(m[0, 2]); -> fail to distinguish 90 or -90
+                pitch = Math.PI / 2;// -Math.Asin(x);
+                yaw = 0;
+            }
+            else if (m[2, 0] >= 1.0)// pitch = -90 case
+            {
+                // Gimbol Lock
+                roll = Math.Atan2(-m[0, 1], m[1, 1]);//-Math.Acos(m[0, 2]); -> fail to distinguish 90 or -90
+                pitch = -Math.PI / 2;// -Math.Asin(x);
+                yaw = 0;
+            }
+            else// general solution
+            {
+                roll = Math.Atan2(m[2, 1], m[2, 2]);
+                pitch = -Math.Asin(m[2, 0]);// -Math.Asin(Math.Asin(m[2,0]);
+                yaw = Math.Atan2(m[1, 0], m[0, 0]);
+            }
+            return new double[] { roll, pitch, yaw };
+        }
+        public static double[] getRPY_test(Matrix<double> m)// Output roll-pitch-yaw angle in world X-Y-Z order
+        {
+            double roll, pitch, yaw;
+            /*// Original SW Add-in method -> Bug
             double x, y;
             x = Math.Min(1.0, Math.Abs(m[2, 0])) * Math.Sign(m[2, 0]);
             y = Math.Min(1.0, Math.Abs(m[0, 2])) * Math.Sign(m[0, 2]);
-            if (Math.Abs(m[2,0]) >= 1.0)
+
+            if (Math.Abs(m[2, 0]) >= 1.0)// Case Error
             {
                 // Gimbol Lock
-                pitch = -Math.Asin(x);
+                pitch = -Math.Asin(x);// Formulation Error
                 roll = Math.Acos(y);
                 yaw = 0;
             }
-            else 
+            else
             {
-                pitch = -Math.Asin(m[2,0]);
-                roll =  Math.Atan2(m[2,1] , m[2,2]);
-                yaw =   Math.Atan2(m[1,0] , m[0,0]);
-            
+                pitch = -Math.Asin(m[2, 0]);
+                roll = Math.Atan2(m[2, 1], m[2, 2]);
+                yaw = Math.Atan2(m[1, 0], m[0, 0]);
+            }*/
+
+
+            double alpha, beta, gamma;
+            beta = Math.Atan2(-m[0, 2], Math.Sqrt(m[0, 0] * m[0, 0] + m[0, 1] * m[0, 1]));
+            if (beta == Math.PI / 2)
+            {
+                alpha = 0;
+                gamma = Math.Atan2(m[1, 0], m[1, 1]);
+            }
+            else if (beta == -Math.PI / 2)
+            {
+                alpha = 0;
+                gamma = -Math.Atan2(m[1, 0], m[1, 1]);
+            }
+            else
+            {
+                alpha = Math.Atan2(m[0, 1] / Math.Cos(beta), m[0, 0] / Math.Cos(beta));
+                gamma = Math.Atan2(m[1, 2] / Math.Cos(beta), m[2, 2] / Math.Cos(beta));
             }
 
-            return new double[] {roll, pitch, yaw};
+            roll = gamma;
+            pitch = beta;
+            yaw = alpha;
+
+            return new double[] { roll, pitch, yaw };
         }
         public static double[] getRPY(MathTransform transform)
         {
@@ -479,6 +571,27 @@ namespace SW2URDF
             {
                 array[i] = (Math.Abs(array[i]) >= min_value) ? array[i] : 0;
             }
+
+        }
+
+        public static double sum(double[] vec)
+        {
+            double s = 0.0;
+            foreach (double d in vec)
+            {
+                s += d;
+            }
+            return s;
+        }
+
+        public static double[] flip(double[] vec)
+        {
+            double[] flipped = new double[vec.Length];
+            for (int i = 0; i < vec.Length; i++)
+            {
+                flipped[i] = -vec[i];
+            }
+            return flipped;
 
         }
 

@@ -1,3 +1,31 @@
+/*
+Copyright (c) 2015 Stephen Brawner
+
+
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+
+
+The above copyright notice and this permission notice shall be included in
+all copies or substantial portions of the Software.
+
+
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+THE SOFTWARE.
+*/
+
 using System;
 using System.Collections;
 using System.Collections.Generic;
@@ -235,11 +263,14 @@ namespace SW2URDF
         public void assemblyURDFExporter()
         {
             ModelDoc2 modeldoc = iSwApp.ActiveDoc;
-            if (modeldoc.GetSaveFlag() || modeldoc.Extension.NeedsRebuild2 == 0 || MessageBox.Show("The SW to URDF exporter requires saving before continuing", "Save and rebuild document?", MessageBoxButtons.YesNo) == DialogResult.Yes)
+            if (modeldoc.GetSaveFlag() || modeldoc.Extension.NeedsRebuild2 == 0 || 
+                MessageBox.Show("The SW to URDF exporter requires saving before continuing", 
+                "Save and rebuild document?", MessageBoxButtons.YesNo) == DialogResult.Yes)
             {
                 if (modeldoc.Extension.NeedsRebuild2 != 0)
                 {
-                    int options = (int)swSaveAsOptions_e.swSaveAsOptions_SaveReferenced | (int)swSaveAsOptions_e.swSaveAsOptions_Silent;
+                    int options = (int)swSaveAsOptions_e.swSaveAsOptions_SaveReferenced | 
+                        (int)swSaveAsOptions_e.swSaveAsOptions_Silent;
                     modeldoc.Save3(options, 0, 0);
                 }
                 //AssemblyExportForm exportForm = new AssemblyExportForm(iSwApp);
@@ -264,11 +295,14 @@ namespace SW2URDF
         public void partURDFExporter()
         {
             ModelDoc2 modeldoc = iSwApp.ActiveDoc;
-            if ((modeldoc.Extension.NeedsRebuild2 == 0) || MessageBox.Show("Save and rebuild document?", "The SW to URDF exporter requires saving before continuing", MessageBoxButtons.YesNo) == DialogResult.Yes)
+            if ((modeldoc.Extension.NeedsRebuild2 == 0) || 
+                MessageBox.Show("Save and rebuild document?", 
+                "The SW to URDF exporter requires saving before continuing", MessageBoxButtons.YesNo) == DialogResult.Yes)
             {
                 if (modeldoc.Extension.NeedsRebuild2 != 0)
                 {
-                    int options = (int)swSaveAsOptions_e.swSaveAsOptions_SaveReferenced | (int)swSaveAsOptions_e.swSaveAsOptions_Silent;
+                    int options = (int)swSaveAsOptions_e.swSaveAsOptions_SaveReferenced | 
+                        (int)swSaveAsOptions_e.swSaveAsOptions_Silent;
                     modeldoc.Save3(options, 0, 0);
                 }
                 PartExportForm exportForm = new PartExportForm(iSwApp);
@@ -289,7 +323,8 @@ namespace SW2URDF
                 string t = feat.GetTypeName2();
                 if (feat.GetTypeName2() == "Attribute")
                 {
-                    SolidWorks.Interop.sldworks.Attribute att = (SolidWorks.Interop.sldworks.Attribute)feat.GetSpecificFeature2();
+                    SolidWorks.Interop.sldworks.Attribute att = 
+                        (SolidWorks.Interop.sldworks.Attribute)feat.GetSpecificFeature2();
                     if (att.GetName() == "URDF Export Configuration")
                     {
                         Parameter param = att.GetParameter("data");

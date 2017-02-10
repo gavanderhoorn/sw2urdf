@@ -1,5 +1,35 @@
-﻿using System;
+﻿/*
+Copyright (c) 2015 Stephen Brawner
+Modified by Sayter <sayter@dmp.com.tw> on 2017/02/10
+
+
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+
+
+The above copyright notice and this permission notice shall be included in
+all copies or substantial portions of the Software.
+
+
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+THE SOFTWARE.
+*/
+
+using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Text;
 using System.Xml;
@@ -9,8 +39,6 @@ namespace SW2URDF
     class ROSFiles
     {
     }
-
-
 
     public abstract class launchElement
     {
@@ -160,10 +188,9 @@ namespace SW2URDF
             this.package = packageName;
             this.robotURDF = URDFName;
 
-            this.elements.Add(new launchInclude("$(find gazebo_worlds)/launch/empty_world.launch"));
+            this.elements.Add(new launchInclude("$(find gazebo_ros)/launch/empty_world.launch"));
             this.elements.Add(new launchNode("tf_footprint_base", "tf", "static_transform_publisher", "0 0 0 0 0 0 base_link base_footprint 40"));
-            this.elements.Add(new launchNode("spawn_model", "gazebo", "spawn_model", "-file $(find " + this.package + ")/robots/" + this.robotURDF + "-urdf -model " + this.model, "screen"));
-            this.elements.Add(new launchInclude("$(find pr2_controller_manager)/controller_manager.launch"));
+            this.elements.Add(new launchNode("spawn_model", "gazebo_ros", "spawn_model", "-file $(find " + this.package + ")/urdf/" + this.robotURDF + " -urdf -model " + this.model, "screen"));
             this.elements.Add(new launchNode("fake_joint_calibration", "rostopic", "rostopic", "pub /calibrated std_msgs/Bool true"));
         }
 
@@ -207,12 +234,12 @@ namespace SW2URDF
             this.elements.Add(new launchArg("model"));
             this.elements.Add(new launchArg("gui", "False"));
 
-            this.elements.Add(new launchParam("robot_description", "", "$(find " + package + ")/robots/" + robotURDF));
+            this.elements.Add(new launchParam("robot_description", "", "$(find " + package + ")/urdf/" + robotURDF));
             this.elements.Add(new launchParam("use_gui", "$(arg gui)"));
 
             this.elements.Add(new launchNode("joint_state_publisher", "joint_state_publisher", "joint_state_publisher"));
             this.elements.Add(new launchNode("robot_state_publisher", "robot_state_publisher", "state_publisher"));
-            this.elements.Add(new launchNode("rviz", "rviz", "rviz", "-d $(find " + this.package + ")/urdf.rviz"));
+            this.elements.Add(new launchNode("rviz", "rviz", "rviz"));
         }
 
         public void writeFiles(string dir)
@@ -239,8 +266,30 @@ namespace SW2URDF
             writer.Close();
         }
 
-
     }
 
+    public class CMakeLists
+    {
+        string package;
+        public CMakeLists(string packageName)
+        {
+            package = packageName;
+        }
+
+        public void writeFiles(string dir)
+        {
+            TextWriter writer = new StreamWriter(dir + @"CMakeLists.txt");
+            writer.WriteLine("cmake_minimum_required(VERSION 2.8.3)");
+            writer.WriteLine("project(" + package + ")\n");
+            writer.WriteLine("find_package(catkin REQUIRED COMPONENTS");
+            writer.WriteLine("  urdf\n)\n");
+            writer.WriteLine("catkin_package(\n)\n");
+            writer.WriteLine("include_directories(");
+            writer.WriteLine("  ${catkin_INCLUDE_DIRS}\n)");
+            writer.Dispose();
+            writer.Close();
+        }
+
+    }
 
 }

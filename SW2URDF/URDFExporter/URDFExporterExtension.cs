@@ -1,4 +1,30 @@
-﻿
+﻿/*
+Copyright (c) 2015 Stephen Brawner
+
+
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+
+
+The above copyright notice and this permission notice shall be included in
+all copies or substantial portions of the Software.
+
+
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+THE SOFTWARE.
+*/
 
 using System;
 using System.Collections.Generic;
@@ -48,7 +74,7 @@ namespace SW2URDF
         // This creates a Link from a Part ModelDoc. It basically just extracts the material properties and saves them to the appropriate fields.
         public link createLinkFromPartModel(ModelDoc2 swModel)
         {
-            link Link = new link();
+            link Link = new link(null);
             Link.name = swModel.GetTitle();
 
             Link.isFixedFrame = false;
@@ -101,7 +127,7 @@ namespace SW2URDF
             // These three matrices are 3x3 as opposed to the 4x4 transformation matrices above. You're welcome for the confusion.
             Matrix<double> linkGlobalMomentInertia = new DenseMatrix(3, 3, Link.Inertial.Inertia.Moment);
             Matrix<double> GlobalRotMat = GlobalTransform.SubMatrix(0, 3, 0, 3);
-            Matrix<double> linkLocalMomentInertia = GlobalRotMat.Inverse() * linkGlobalMomentInertia;
+            Matrix<double> linkLocalMomentInertia = GlobalRotMat * linkGlobalMomentInertia * GlobalRotMat.Transpose();
 
             Link.Inertial.Origin.xyz = ops.getXYZ(localLinkCoMTransform);
             Link.Inertial.Origin.rpy = new double[] { 0, 0, 0 };
@@ -184,7 +210,7 @@ namespace SW2URDF
         //Method which builds a single link
         public link createLinkFromComponents(link parent, List<Component2> components, LinkNode node)
         {
-            link child = new link();
+            link child = new link(parent);
             child.name = node.linkName;
 
             if (components.Count > 0)
@@ -200,6 +226,7 @@ namespace SW2URDF
 
             if (parent != null)
             {
+                System.Diagnostics.Debug.WriteLine("Creating joint " + child.name);
                 createJoint(parent, child, node);
             }
 
@@ -299,14 +326,13 @@ namespace SW2URDF
             string axisName = node.axisName;
             string jointType = node.jointType;
 
-            List<Component2> componentsToFix = fixComponents(parent);
             AssemblyDoc assy = (AssemblyDoc)ActiveSWModel;
-
+            List<Component2> fixedComponents = fixComponents(parent);
             child.Joint = new joint();
             child.Joint.name = jointName;
             child.Joint.Parent.name = parent.name;
             child.Joint.Child.name = child.name;
-
+            Boolean unfix = false;
             if (child.isFixedFrame)
             {
                 axisName = "";
@@ -316,7 +342,7 @@ namespace SW2URDF
             else if (coordSysName == "Automatically Generate" || axisName == "Automatically Generate" || jointType == "Automatically Detect")
             {
                 // We have to estimate the joint if the user specifies automatic for either the reference coordinate system, the reference axis or the joint type.
-                estimateGlobalJointFromComponents(assy, parent, child);
+                unfix = estimateGlobalJointFromComponents(assy, parent, child);
             }
 
             if (coordSysName == "Automatically Generate")
@@ -364,7 +390,10 @@ namespace SW2URDF
             estimateGlobalJointFromRefGeometry(parent, child);
 
             coordSysName = (parent.Joint == null) ? parent.CoordSysName : parent.Joint.CoordinateSystemName;
-            unFixComponents(componentsToFix);
+            if (unfix)
+            {
+                unFixComponents(fixedComponents);
+            }
             localizeJoint(child.Joint, coordSysName);
         }
 
@@ -488,18 +517,35 @@ namespace SW2URDF
         // axis to local values
         public void localizeJoint(joint Joint, string parentCoordsysName)
         {
+            //Global Coordinate of Parent
             MathTransform parentTransform = getCoordinateSystemTransform(parentCoordsysName);
-            double[] parentRPY = ops.getRPY(parentTransform);
-
-
             Matrix<double> ParentJointGlobalTransform = ops.getTransformation(parentTransform);
-            MathTransform coordsysTransform = getCoordinateSystemTransform(Joint.CoordinateSystemName);
-            double[] coordsysRPY = ops.getRPY(coordsysTransform);
+            double[] parentRPY = ops.getRPY(parentTransform);// Parent RPY in SW Coordsys
 
-            //Transform from global origin to child joint
+            //PrintMatrix(ParentJointGlobalTransform, parentCoordsysName);
+            //PrintMatrix(parentTransform, parentCoordsysName);
+            //PrintMatrix(parentTransform, ParentJointGlobalTransform, parentCoordsysName);
+
+            //Global Coordinate of Joint
+            MathTransform coordsysTransform = getCoordinateSystemTransform(Joint.CoordinateSystemName);
             Matrix<double> ChildJointGlobalTransform = ops.getTransformation(coordsysTransform);
-            Matrix<double> ChildJointOrigin = ParentJointGlobalTransform.Inverse() * ChildJointGlobalTransform;
+            double[] coordsysRPY = ops.getRPY(coordsysTransform);// Joint RPY in SW Coordsys
+
+
+            /*
+             System.Windows.Forms.MessageBox.Show(
+                "Parent Coor Name = " + parentCoordsysName + ", \n" +
+                parentTransform.ArrayData[9].ToString("F6") + ", " + parentTransform.ArrayData[10].ToString("F6") + ", " + parentTransform.ArrayData[11].ToString("F6") + "\n\n" +
+                "Joint Coor Name = " + Joint.CoordinateSystemName + ", \n" +
+                coordsysTransform.ArrayData[9].ToString("F6") + ", " + coordsysTransform.ArrayData[10].ToString("F6") + ", " + coordsysTransform.ArrayData[11].ToString("F6")
+                );
+             //*/
+
+            //Transform from global origin to child joint            
+            Matrix<double> ChildJointOrigin = ParentJointGlobalTransform.Inverse() * ChildJointGlobalTransform;// Joint in Parent Frame
             double[] globalRPY = ops.getRPY(ChildJointOrigin);
+
+            //PrintMatrix(ChildJointOrigin, "Joint in Parent Frame");
 
 
             //Localize the axis to the Link's coordinate system.
@@ -512,6 +558,48 @@ namespace SW2URDF
             ops.threshold(Joint.Origin.xyz, 0.00001);
         }
 
+        private void PrintMatrix(Matrix<double> m, string name)
+        {
+            string dec = "F6";
+            System.Windows.Forms.MessageBox.Show(
+                "Math.Net\n" +
+                "Name = " + name + ", \n" +
+                m[0, 0].ToString(dec) + ", " + m[0, 1].ToString(dec) + ", " + m[0, 2].ToString(dec) + ", " + m[0, 3].ToString(dec) + "\n" +
+                m[1, 0].ToString(dec) + ", " + m[1, 1].ToString(dec) + ", " + m[1, 2].ToString(dec) + ", " + m[1, 3].ToString(dec) + "\n" +
+                m[2, 0].ToString(dec) + ", " + m[2, 1].ToString(dec) + ", " + m[2, 2].ToString(dec) + ", " + m[2, 3].ToString(dec) + "\n" +
+                m[3, 0].ToString(dec) + ", " + m[3, 1].ToString(dec) + ", " + m[3, 2].ToString(dec) + ", " + m[3, 3].ToString(dec)
+                );
+        }
+        private void PrintMatrix(MathTransform m, string name)
+        {
+            string dec = "F6";
+            System.Windows.Forms.MessageBox.Show(
+                "SW.API\n" +
+                "Name = " + name + ", \n" +
+                m.ArrayData[0].ToString(dec) + ", " + m.ArrayData[3].ToString(dec) + ", " + m.ArrayData[6].ToString(dec) + ", " + m.ArrayData[9].ToString(dec) + "\n" +
+                m.ArrayData[1].ToString(dec) + ", " + m.ArrayData[4].ToString(dec) + ", " + m.ArrayData[7].ToString(dec) + ", " + m.ArrayData[10].ToString(dec) + "\n" +
+                m.ArrayData[2].ToString(dec) + ", " + m.ArrayData[5].ToString(dec) + ", " + m.ArrayData[8].ToString(dec) + ", " + m.ArrayData[11].ToString(dec) + "\n" +
+                m.ArrayData[13].ToString(dec) + ", " + m.ArrayData[14].ToString(dec) + ", " + m.ArrayData[15].ToString(dec) + ", " + m.ArrayData[12].ToString(dec)
+                );
+        }
+        private void PrintMatrix(MathTransform m, Matrix<double> mn, string name)
+        {
+            string dec = "F6";
+            System.Windows.Forms.MessageBox.Show(
+                "Name = " + name + ", \n\n" +
+                "SW.API\n" +                
+                m.ArrayData[0].ToString(dec) + ", " + m.ArrayData[3].ToString(dec) + ", " + m.ArrayData[6].ToString(dec) + ", " + m.ArrayData[9].ToString(dec) + "\n" +
+                m.ArrayData[1].ToString(dec) + ", " + m.ArrayData[4].ToString(dec) + ", " + m.ArrayData[7].ToString(dec) + ", " + m.ArrayData[10].ToString(dec) + "\n" +
+                m.ArrayData[2].ToString(dec) + ", " + m.ArrayData[5].ToString(dec) + ", " + m.ArrayData[8].ToString(dec) + ", " + m.ArrayData[11].ToString(dec) + "\n" +
+                m.ArrayData[13].ToString(dec) + ", " + m.ArrayData[14].ToString(dec) + ", " + m.ArrayData[15].ToString(dec) + ", " + m.ArrayData[12].ToString(dec) +
+                "\n\n"+
+                 "Math.Net\n" +
+                mn[0, 0].ToString(dec) + ", " + mn[0, 1].ToString(dec) + ", " + mn[0, 2].ToString(dec) + ", " + mn[0, 3].ToString(dec) + "\n" +
+                mn[1, 0].ToString(dec) + ", " + mn[1, 1].ToString(dec) + ", " + mn[1, 2].ToString(dec) + ", " + mn[1, 3].ToString(dec) + "\n" +
+                mn[2, 0].ToString(dec) + ", " + mn[2, 1].ToString(dec) + ", " + mn[2, 2].ToString(dec) + ", " + mn[2, 3].ToString(dec) + "\n" +
+                mn[3, 0].ToString(dec) + ", " + mn[3, 1].ToString(dec) + ", " + mn[3, 2].ToString(dec) + ", " + mn[3, 3].ToString(dec)
+                );
+        }
 
         // Funny method I created that inserts a RefAxis and then finds the reference to it.
         public Feature insertAxis(SketchSegment axis)
@@ -645,7 +733,7 @@ namespace SW2URDF
         }
 
         //Calculates the free degree of freedom (if exists), and then determines the location of the joint, the axis of rotation/translation, and the type of joint
-        public void estimateGlobalJointFromComponents(AssemblyDoc assy, link parent, link child)
+        public Boolean estimateGlobalJointFromComponents(AssemblyDoc assy, link parent, link child)
         {
             //Create the ref objects
             int R1Status, R2Status, L1Status, L2Status, R1DirStatus, R2DirStatus, DOFs;
@@ -655,16 +743,53 @@ namespace SW2URDF
             // Surpress Limit Mates to properly find degrees of freedom. They don't work with the API call
             List<Mate2> limitMates = new List<Mate2>();
             limitMates = suppressLimitMates(child.SWMainComponent);
-
+            Boolean success = false;
             if (child.SWMainComponent != null)
             {
-
+                
                 // The wonderful undocumented API call I found to get the degrees of freedom in a joint. 
                 // https://forum.solidworks.com/thread/57414
                 int remainingDOFs = child.SWMainComponent.GetRemainingDOFs(out R1Status, out RPoint1, out R1DirStatus, out RDir1,
                                                                            out R2Status, out RPoint2, out R2DirStatus, out RDir2,
                                                                            out L1Status, out LDir1,
                                                                            out L2Status, out LDir2);
+                if (RPoint1 != null)
+                {
+                    System.Diagnostics.Debug.WriteLine("R1: " + R1Status + ", " + RPoint1 + ", " + R1DirStatus + ", " + RDir1);
+                }
+                else {
+                    System.Diagnostics.Debug.WriteLine("R1: " + R1Status + ", " + R1DirStatus);
+                }
+
+                if (RPoint2 != null)
+                {
+                    System.Diagnostics.Debug.WriteLine("R2: " + R2Status + ", " + RPoint2 + ", " + R2DirStatus + ", " + RDir2);
+                }
+                else
+                {
+                    System.Diagnostics.Debug.WriteLine("R2: " + R2Status + ", " + R2DirStatus);
+                }
+                if (LDir1 != null)
+                {
+                    System.Diagnostics.Debug.WriteLine("L1: " + L1Status + ", "  + LDir1);
+                }
+                else
+                {
+                    System.Diagnostics.Debug.WriteLine("L1: " + L1Status);
+                }
+                if (LDir2 != null)
+                {
+                    System.Diagnostics.Debug.WriteLine("L2: " + ", " + LDir2);
+                }
+                else
+                {
+                    System.Diagnostics.Debug.WriteLine("L2: " + L2Status);
+                }
+
+
+                System.Diagnostics.Debug.WriteLine(R2Status + ", " + RPoint2 + ", " + R2DirStatus + ", " + RDir2);
+                System.Diagnostics.Debug.WriteLine(L1Status + ", " + LDir1);
+                System.Diagnostics.Debug.WriteLine(L2Status + ", " + LDir2);
                 DOFs = remainingDOFs;
 
 
@@ -675,6 +800,7 @@ namespace SW2URDF
 
                 if (DOFs == 0 && (R1Status + L1Status > 0))
                 {
+                    success = true;
                     if (R1Status == 1)
                     {
                         child.Joint.type = "continuous";
@@ -700,6 +826,7 @@ namespace SW2URDF
                     addLimits(child.Joint, limitMates);
                 }
             }
+            return success;
         }
 
         //This now needs to be able to get the component, and it's associated coordinate system name.
@@ -715,6 +842,7 @@ namespace SW2URDF
             }
         }
 
+        // Get Global Transform
         // Method to get the SolidWorks MathTransform from a coordinate system. This method can account for
         // coordinate systems that are embedded in subcomponents, and apply the correct transformation to return
         // it to a global transform. It assumes that the coordinate system name is formatted like:
@@ -835,6 +963,10 @@ namespace SW2URDF
             XYZ[1] = axisParams[1] - axisParams[4];
             XYZ[2] = axisParams[2] - axisParams[5];
             XYZ = ops.pnorm(XYZ, 2);
+            if (ops.sum(XYZ) < 0.0)
+            {
+                XYZ = ops.flip(XYZ);
+            }
             globalAxis(XYZ, ComponentTransform);
             return XYZ;
         }
@@ -1044,6 +1176,11 @@ namespace SW2URDF
         //Unfixes components that were fixed to find the free degree of freedom
         public void unFixComponents(List<Component2> components)
         {
+            foreach (Component2 comp in components)
+            {
+                System.Diagnostics.Debug.WriteLine("Unfixing component " + comp.GetID());
+            }
+
             Common.selectComponents(ActiveSWModel, components, true);
             AssemblyDoc assy = (AssemblyDoc)ActiveSWModel;
             assy.UnfixComponent();
@@ -1086,19 +1223,38 @@ namespace SW2URDF
             return Axes.Contains(AxisName);
         }
 
+        private List<Component2> getParentAncestorComponents(link node)
+        {
+            List<Component2> components = new List<Component2>(node.SWcomponents);
+            if (node.Parent != null)
+            {
+                components.AddRange(getParentAncestorComponents(node.Parent));
+            }
+            return components;
+        }
+
+
         //Used to fix components to estimate the degree of freedom.
         private List<Component2> fixComponents(link parent)
         {
+            System.Diagnostics.Debug.WriteLine("Fixing components for " + parent.name);
+            List<Component2> componentsToFix = getParentAncestorComponents(parent);
             List<Component2> componentsToUnfix = new List<Component2>();
-            foreach (Component2 comp in parent.SWcomponents)
+            foreach (Component2 comp in componentsToFix)
             {
+                System.Diagnostics.Debug.WriteLine("Fixing " + comp.GetID());
                 bool isFixed = comp.IsFixed();
                 if (!comp.IsFixed())
                 {
                     componentsToUnfix.Add(comp);
                 }
+                else
+                {
+                    System.Diagnostics.Debug.WriteLine("Component " + comp.GetID() + " is already fixed");
+                }
+
             }
-            Common.selectComponents(ActiveSWModel, parent.SWcomponents, true);
+            Common.selectComponents(ActiveSWModel, componentsToFix, true);
             AssemblyDoc assy = (AssemblyDoc)ActiveSWModel;
             assy.FixComponent();
             return componentsToUnfix;

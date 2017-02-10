@@ -1,4 +1,33 @@
-﻿using System;
+﻿/*
+Copyright (c) 2015 Stephen Brawner
+Modified by Sayter <sayter@dmp.com.tw> on 2017/02/10
+
+
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+
+
+The above copyright notice and this permission notice shall be included in
+all copies or substantial portions of the Software.
+
+
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+THE SOFTWARE.
+*/
+
+using System;
 using System.IO;
 
 using SolidWorks.Interop.sldworks;
@@ -11,8 +40,10 @@ using MathNet.Numerics.LinearAlgebra.Double;
 
 namespace SW2URDF
 {
-    // This class contains a long list of methods that are used throughout the export process. Methods for building links and joints are contained in here.
-    // Many of the methods are overloaded, but seek to reduce repeated code as much as possible (i.e. the overloaded methods call eachother).
+    // This class contains a long list of methods that are used throughout the export process. 
+    // Methods for building links and joints are contained in here.
+    // Many of the methods are overloaded, but seek to reduce repeated code as much as possible 
+    // (i.e. the overloaded methods call eachother).
     // These methods are used by the PartExportForm, the AssemblyExportForm and the PropertyManager Page
     public partial class URDFExporter
     {
@@ -81,20 +112,25 @@ namespace SW2URDF
             URDFPackage package = new URDFPackage(mPackageName, mSavePath);
             package.createDirectories();
             mRobot.name = mPackageName;
-            string windowsURDFFileName = package.WindowsRobotsDirectory + mRobot.name + ".URDF";
-            string windowsManifestFileName = package.WindowsPackageDirectory + "manifest.xml";
+            string windowsURDFFileName = package.WindowsRobotsDirectory + mRobot.name + ".urdf";
+            string windowsManifestFileName = package.WindowsPackageDirectory + "package.xml";
+            string windowsCMakeListsName = package.WindowsPackageDirectory + "CMakeLists.txt";
 
             //Creating manifest file
             manifestWriter manifestWriter = new manifestWriter(windowsManifestFileName);
             manifest Manifest = new manifest(mPackageName);
             Manifest.writeElement(manifestWriter);
 
+            //Creating CMakeLists file
+            CMakeLists cmakelists = new CMakeLists(mPackageName);
+            cmakelists.writeFiles(package.WindowsPackageDirectory);
+
             //Creating RVIZ launch file
-            Rviz rviz = new Rviz(mPackageName, mRobot.name + ".URDF");
+            Rviz rviz = new Rviz(mPackageName, mRobot.name + ".urdf");
             rviz.writeFiles(package.WindowsLaunchDirectory);
 
             //Creating Gazebo launch file
-            Gazebo gazebo = new Gazebo(this.mRobot.name, this.mPackageName, mRobot.name + ".URDF");
+            Gazebo gazebo = new Gazebo(this.mRobot.name, this.mPackageName, mRobot.name + ".urdf");
             gazebo.writeFile(package.WindowsLaunchDirectory);
 
 
@@ -143,8 +179,10 @@ namespace SW2URDF
             {
                 if (System.IO.File.Exists(Link.Visual.Material.Texture.wFilename))
                 {
-                    Link.Visual.Material.Texture.filename = package.TexturesDirectory + Path.GetFileName(Link.Visual.Material.Texture.wFilename);
-                    string textureSavePath = package.WindowsTexturesDirectory + Path.GetFileName(Link.Visual.Material.Texture.wFilename);
+                    Link.Visual.Material.Texture.filename = 
+                        package.TexturesDirectory + Path.GetFileName(Link.Visual.Material.Texture.wFilename);
+                    string textureSavePath = 
+                        package.WindowsTexturesDirectory + Path.GetFileName(Link.Visual.Material.Texture.wFilename);
                     System.IO.File.Copy(Link.Visual.Material.Texture.wFilename, textureSavePath, true);
                 }
             }
@@ -168,7 +206,9 @@ namespace SW2URDF
             int warnings = 0;
            
             string coordsysName  = "";
-            coordsysName = (Link.Joint == null || Link.Joint.CoordinateSystemName == null) ? Link.CoordSysName : Link.Joint.CoordinateSystemName;
+            coordsysName = 
+                (Link.Joint == null || Link.Joint.CoordinateSystemName == null) 
+                ? Link.CoordSysName : Link.Joint.CoordinateSystemName;
 
             Dictionary<string, string> names = GetComponentRefGeoNames(coordsysName);
             ModelDoc2 ActiveDoc = ActiveSWModel;
@@ -206,7 +246,8 @@ namespace SW2URDF
             int saveOptions = (int)swSaveAsOptions_e.swSaveAsOptions_Silent;
             setLinkSpecificSTLPreferences(names["geo"], Link.STLQualityFine, ActiveDoc);
 
-            ActiveDoc.Extension.SaveAs(windowsMeshFileName, (int)swSaveAsVersion_e.swSaveAsCurrentVersion, saveOptions, null, ref errors, ref warnings);
+            ActiveDoc.Extension.SaveAs(windowsMeshFileName, 
+                (int)swSaveAsVersion_e.swSaveAsCurrentVersion, saveOptions, null, ref errors, ref warnings);
             if (ComponentName.Length > 0)
             {
                 iSwApp.CloseDoc(ComponentName);
@@ -227,7 +268,8 @@ namespace SW2URDF
         {
             
             createBaseRefOrigin(zIsUp);
-            MathTransform coordSysTransform = ActiveSWModel.Extension.GetCoordinateSystemTransformByName("Origin_global");
+            MathTransform coordSysTransform = 
+                ActiveSWModel.Extension.GetCoordinateSystemTransformByName("Origin_global");
             Matrix<double> GlobalTransform = ops.getTransformation(coordSysTransform);
 
             localizeLink(mRobot.BaseLink, GlobalTransform);
@@ -254,14 +296,17 @@ namespace SW2URDF
 
             //Saving part as STL mesh
 
-            ActiveSWModel.Extension.SaveAs(windowsMeshFileName, (int)swSaveAsVersion_e.swSaveAsCurrentVersion, (int)swSaveAsOptions_e.swSaveAsOptions_Silent, null, ref errors, ref warnings);
+            ActiveSWModel.Extension.SaveAs(windowsMeshFileName, (int)swSaveAsVersion_e.swSaveAsCurrentVersion, 
+                (int)swSaveAsOptions_e.swSaveAsOptions_Silent, null, ref errors, ref warnings);
             mRobot.BaseLink.Visual.Geometry.Mesh.filename = meshFileName;
             mRobot.BaseLink.Collision.Geometry.Mesh.filename = meshFileName;
 
             correctSTLMesh(windowsMeshFileName);
 
-            mRobot.BaseLink.Visual.Material.Texture.filename = package.TexturesDirectory + Path.GetFileName(mRobot.BaseLink.Visual.Material.Texture.wFilename);
-            string textureSavePath = package.WindowsTexturesDirectory + Path.GetFileName(mRobot.BaseLink.Visual.Material.Texture.wFilename);
+            mRobot.BaseLink.Visual.Material.Texture.filename = 
+                package.TexturesDirectory + Path.GetFileName(mRobot.BaseLink.Visual.Material.Texture.wFilename);
+            string textureSavePath = 
+                package.WindowsTexturesDirectory + Path.GetFileName(mRobot.BaseLink.Visual.Material.Texture.wFilename);
             if (mRobot.BaseLink.Visual.Material.Texture.wFilename != "")
             {
                 System.IO.File.Copy(mRobot.BaseLink.Visual.Material.Texture.wFilename, textureSavePath, true);
@@ -329,7 +374,8 @@ namespace SW2URDF
         //If the user selected something specific for a particular link, that is handled here.
         public void setLinkSpecificSTLPreferences(string CoordinateSystemName, bool qualityFine, ModelDoc2 doc)
         {
-            doc.Extension.SetUserPreferenceString((int)swUserPreferenceStringValue_e.swFileSaveAsCoordinateSystem, (int)swUserPreferenceOption_e.swDetailingNoOptionSpecified, CoordinateSystemName);
+            doc.Extension.SetUserPreferenceString((int)swUserPreferenceStringValue_e.swFileSaveAsCoordinateSystem, 
+                (int)swUserPreferenceOption_e.swDetailingNoOptionSpecified, CoordinateSystemName);
             if (qualityFine)
             {
                 iSwApp.SetUserPreferenceIntegerValue((int)swUserPreferenceIntegerValue_e.swSTLQuality, (int)swSTLQuality_e.swSTLQuality_Fine);
